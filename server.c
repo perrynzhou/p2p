@@ -30,9 +30,11 @@ typedef struct client_fd_meta_t
 {
   char *addr;
   int fd;
-  int8_t  status;
+  int8_t status;
 } client_fd_meta;
-static void travel_cb(void *p_client_fd_meta, void *data);
+static void travel_add_cb(void *p_client_fd_meta, void *data);
+static void travel_del_cb(void *p_client_fd_meta, void *data);
+
 static int init_tcp_socket(const char *addr, int port)
 {
   int fd = socket(PF_INET, SOCK_STREAM, 0);
@@ -98,13 +100,19 @@ size_t pack_message(char *buffer, char *address, size_t address_len, int message
   strncpy((char *)buffer + sizeof(message), (char *)address, address_len);
   return strlen((char *)&buffer);
 }
-static void travel_cb(void *p_client_fd_meta, void *data)
+static void travel_add_cb(void *p_client_fd_meta, void *data)
 {
   client_fd_meta *cm = (client_fd_meta *)p_client_fd_meta;
   char *addr = (char *)data;
   char buffer[2048] = {'\0'};
   size_t len = pack_message((char *)&buffer, addr, strlen(addr), REGISTER);
   write(cm->fd, (char *)&buffer, len);
+}
+static void travel_del_cb(void *p_client_fd_meta, void *data)
+{
+  client_fd_meta *cm = (client_fd_meta *)p_client_fd_meta;
+  char *addr = (char *)data;
+  char buffer[2048] = {'\0'};
 }
 void do_request(hash_list *list, int efd, int cfd, char *buf)
 {
@@ -150,7 +158,7 @@ int main(int argc, char *argv[])
 
         char address[128] = {'\0'};
         parse_fd_address(client_fd, (char *)&address, 128);
-        hash_list_travel(list, (char *)&address, (hash_list_travel_cb)&travel_cb);
+        hash_list_travel(list, (char *)&address, (hash_list_travel_cb)&travel_add_cb);
         accept_fd_callback(list, client_fd, (char *)address);
         event.data.fd = client_fd;
         event.events = EPOLLIN | EPOLLET;
@@ -164,10 +172,11 @@ int main(int argc, char *argv[])
           int count = recv(events[i].data.fd, (char *)&buf, 4096, 0);
           if (count < 0)
           {
-             char address[128] = {'\0'};
-             int client_fd = events[i].data.fd;
-             parse_fd_address(client_fd, (char *)&address, 128);
-           
+            char address[128] = {'\0'};
+            int client_fd = events[i].data.fd;
+            parse_fd_address(client_fd, (char *)&address, 128);
+            hash_list_travel(list, (char *)&address, (hash_list_travel_cb)&travel_del_cb);
+
             epoll_ctl(efd, EPOLL_CTL_DEL, events[i].data.fd, NULL);
             close(events[i].data.fd);
             continue;
