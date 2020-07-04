@@ -5,8 +5,8 @@
   > Created Time: Friday, July 03, 2020 PM02:25:20 HKT
  ************************************************************************/
 
-#ifndef _MESSAGE_H
-#define _MESSAGE_H
+#ifndef _UTILS_H
+#define _UTILS_H
 #include <stdint.h>
 typedef enum message_type_t {
     REGISTER=0,
