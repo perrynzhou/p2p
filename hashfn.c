@@ -5,6 +5,8 @@
   > Created Time: Fri 07 Feb 2020 12:18:31 PM CST
  ************************************************************************/
 
+#include "hashfn.h"
+#include <stdint.h>
 #define DM_DELTA 0x9E3779B9
 #define DM_FULLROUNDS 10 /* 32 is overkill, 16 is strong crypto */
 #define DM_PARTROUNDS 6  /* 6 gets complete mixing */

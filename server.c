@@ -104,7 +104,7 @@ void unpack_srv_message(message *m, char *buf)
   message *tmp = (message *)buf;
   m->type = tmp->type;
   m->len = tmp->len;
-  m->body = buf + sizeof(message);
+  m->body = strdup(buf + sizeof(message));
 }
 static void broadcast_client_cb(void *arg1, void *arg2)
 {
@@ -180,21 +180,21 @@ int main(int argc, char *argv[])
           message recv_msg;
           unpack_srv_message(&recv_msg, (char *)&buf);
           client_meta *client = NULL;
-          switch (recv_msg->type)
+          switch (recv_msg.type)
           {
           case REGISTER:
-            client = register_client(list, events[i].data.fd, recv_msg->addr);
+            client = register_client(list, events[i].data.fd, recv_msg.body);
             client->type = REGISTER;
             hash_list_travel(list, client, (hash_list_travel_cb *)&broadcast_client_cb);
             client->status = 0;
             break;
           case UNREGISTER:
-            client = unregister_client(list, recv_msg->addr);
+            client = unregister_client(list, recv_msg.body);
             client->status = 1;
             hash_list_travel(list, client, (hash_list_travel_cb *)&broadcast_client_cb);
             epoll_ctl(efd, EPOLL_CTL_DEL, events[i].data.fd, NULL);
             close(events[i].data.fd);
-            free（client);
+            free(client);
             break;
           default:
             break;

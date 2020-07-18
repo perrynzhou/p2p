@@ -5,12 +5,14 @@
   > Created Time: Friday, July 03, 2020 PM02:24:30 HKT
  ************************************************************************/
 
+#include "hashfn.h"
 #include <stdio.h>
 #include <time.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
-#include <sys/types.h>
 #include <arpa/inet.h>
+#include <sys/types.h>
 #include <sys/socket.h>
 #include "hash_list.h"
 #include "utils.h"
@@ -19,8 +21,10 @@ typedef struct client_peer_t
   int tcp_fd;
   hash_list *list;
 } client_peer;
-static void del_client_addr_cb(void *addr, void *data);
-static void sync_client_addr(hash_list *list, char *buffer)
+static void del_client_addr_cb(void *addr, void *data){
+
+}
+static void sync_client_addr(hash_list *list, char *p_buf)
 {
   message *m = (message *)p_buf;
   char buffer[4096] = {'\0'};
@@ -31,7 +35,7 @@ static void sync_client_addr(hash_list *list, char *buffer)
     hash_list_insert(list, buffer + sizeof(message), client_info);
     return;
   }
-  hash_list_travel(list, vbuffer + sizeof(message), (hash_list_travel_cb)&del_client_addr_cb);
+  hash_list_travel(list, (char *)&buffer + sizeof(message), (hash_list_travel_cb)&del_client_addr_cb);
 }
 //new thread to update sync
 void *sync_client_peer_thread_func(void *arg)
@@ -41,10 +45,10 @@ void *sync_client_peer_thread_func(void *arg)
   {
     char buf[4096] = {'\0'};
     char *p_buf = (char *)&buf;
-    ssize_t sz = recv(cp->tcp_fd, p_buf, 0);
+    ssize_t sz = recv(cp->tcp_fd, p_buf,4096, 0);
     if (sz > 0)
     {
-      update_client_addr(cp->list, p_buf);
+      sync_client_addr(cp->list, p_buf);
     }
   }
 }
@@ -72,7 +76,7 @@ static int init_tcp_client(const char *addr, int port)
 }
 void list_peer_client(client_peer *peer)
 {
-  hash_list_travel(peer, NULL, NULL;)
+  hash_list_travel(peer->list, NULL, NULL);
 }
 int main(int argc, char *argv[])
 {
