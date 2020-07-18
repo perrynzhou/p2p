@@ -43,7 +43,7 @@ int hash_list_insert(hash_list *list, const char *key, void *item) {
   return 0;
 }
 hash_list *hash_list_alloc(size_t max_size) {}
-void *hash_list_remove(hash_list *list, const char *key) {
+int hash_list_remove(hash_list *list, const char *key) {
   uint64_t h = hash_gfs(key, strlen(key));
   uint32_t index = h % list->max_size;
   if (list->arrays[index] == NULL) {
