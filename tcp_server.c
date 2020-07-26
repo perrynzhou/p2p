@@ -28,24 +28,22 @@
 #include "util.h"
 #include "hash_list.h"
 #include "message.h"
-int init_tcp_socket(argv[1], atoi(argv[2]), 0);
-(struct tcpServer *ts, const char *addr, int port, int max_connections)
+int tcp_server_init(struct tcp_server *ts, const char *addr, int port, int max_connections)
 {
   if (ts != NULL)
   {
-    ts->addr = strdup(addr);
-    ts->port = port;
     ts->max_connections = max_connections;
     int sfd = init_tcp_socket(addr, port, 0);
     if (sfd == -1 || (ts->efd = epoll_create(max_connections)) == -1)
     {
       return -1;
     }
-    ts->event.data.fd = sfd;
+    setsockopt(ts->sfd, SOL_SOCKET, SO_REUSEADDR, (const char *)&reuse, sizeof(int));
+    ts->sfd = ts->event.data.fd = sfd;
     ts->event.events = EPOLLIN | EPOLLET;
     epoll_ctl(ts->efd, EPOLL_CTL_ADD, sfd, &ts->event);
     ts->connections_events = calloc(max_connections, sizeof(struct epoll_event));
-    if(ts->connections_events==NULL)
+    if (ts->connections_events == NULL)
     {
       close(ts->efd);
       close(ts->sfd);
@@ -54,44 +52,25 @@ int init_tcp_socket(argv[1], atoi(argv[2]), 0);
     return 0;
   }
 }
-int tcp_server_start(struct tcpServer *ts)
+int tcp_server_start(struct tcp_server *ts)
 {
-}
-void tcp_server_deinit(struct tcpServer *ts)
-{
-}
-int main(int argc, char *argv[])
-{
-  int fd = init_tcp_socket(argv[1], atoi(argv[2]), 0);
-  assert(fd != -1);
-  int reuse = 0;
-  setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (const char *)&reuse, sizeof(int));
-  int efd = epoll_create(1024);
-  int max_event = 1024;
-  struct epoll_event event;
-  event.data.fd = fd;
-  event.events = EPOLLIN | EPOLLET;
-  epoll_ctl(efd, EPOLL_CTL_ADD, fd, &event);
-  struct epoll_event *events = calloc(max_event, sizeof(struct epoll_event));
-
-  //
   struct hash_list *list = hash_list_alloc(4096);
   while (1)
   {
-    int n = epoll_wait(efd, events, max_event, -1);
+    int n = epoll_wait(ts->efd, ts->events, ts->max_connections, -1);
     for (int i = 0; i < n; i++)
     {
-      if (events[i].events & EPOLLERR)
+      if (ts->events[i].events & EPOLLERR)
       {
         fprintf(stdout, "epoll error\n");
-        close(events[i].data.fd);
+        close(ts->events[i].data.fd);
         continue;
       }
-      else if (fd == events[i].data.fd)
+      else if (ts->sfd == ts->events[i].data.fd)
       {
         struct sockaddr client_addr;
         socklen_t len = sizeof(struct sockaddr);
-        int client_fd = accept(fd, &client_addr, &len);
+        int client_fd = accept(ts->sfd, &client_addr, &len);
         if (client_fd == -1)
         {
           break;
@@ -99,15 +78,15 @@ int main(int argc, char *argv[])
         set_tcp_nonblock(client_fd);
         event.data.fd = client_fd;
         event.events = EPOLLIN | EPOLLET;
-        epoll_ctl(efd, EPOLL_CTL_ADD, client_fd, &event);
+        epoll_ctl(ts->efd, EPOLL_CTL_ADD, client_fd, &ts->event);
         fprintf(stdout, "accept \n");
       }
       else
       {
         char addr[32] = {'\0'};
-        fetch_client_address(events[i].data.fd, (char *)&addr, 32);
+        fetch_client_address(ts->events[i].data.fd, (char *)&addr, 32);
         struct connection_message tmp;
-        ssize_t count = recv(events[i].data.fd, &tmp, 4096, 0);
+        ssize_t count = recv(ts->events[i].data.fd, &tmp, 4096, 0);
         if (count > 0)
         {
           char *uuid = (char *)&tmp.uuid;
@@ -120,11 +99,19 @@ int main(int argc, char *argv[])
           else
           {
             hash_list_remove(list, uuid);
-            epoll_ctl(efd, EPOLL_CTL_DEL, events[i].data.fd, &event);
+            epoll_ctl(ts->efd, EPOLL_CTL_DEL, ts->events[i].data.fd, &ts->event);
             fprintf(stdout, "%s leave\n", (char *)&addr);
           }
         }
       }
     }
   }
+}
+int main(int argc, char *argv[])
+{
+  struct tcp_server ts;
+  memset(&ts, 0, sizeof(ts));
+  tcp_server_init(&ts, argv[1], argv[2], 1024);
+  tcp_server_start(&ts);
+  return 0;
 }
