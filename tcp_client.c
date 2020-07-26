@@ -33,6 +33,7 @@ int main(int argc, char *argv[])
   }
   while (1)
   {
-    sleep(1);
+    while(fgets(ptr,4096,stdin)!=NULL) {
+    }
   }
 }

@@ -143,10 +143,11 @@ int hash_list_insert(struct hash_list *list, const char *key, void *item)
   prev->next = node;
   return 0;
 }
-struct hash_list *hash_list_alloc(size_t max_size) {
-  struct hash_list *lt = (struct hash_list *)calloc(1,sizeof(*lt));
-  lt->max_size= max_size;
-  lt->arrays =calloc(max_size,sizeof(void *));
+struct hash_list *hash_list_alloc(size_t max_size)
+{
+  struct hash_list *lt = (struct hash_list *)calloc(1, sizeof(*lt));
+  lt->max_size = max_size;
+  lt->arrays = (void **)calloc(max_size, sizeof(void *));
   return lt;
 }
 int hash_list_remove(struct hash_list *list, const char *key)
