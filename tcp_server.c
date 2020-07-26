@@ -5,6 +5,7 @@
   > Created Time: Friday, July 03, 2020 PM02:24:38 HKT
  ************************************************************************/
 
+#include "tcp_server.h"
 #include "message.h"
 #include <stdio.h>
 #include <time.h>
@@ -27,9 +28,41 @@
 #include "util.h"
 #include "hash_list.h"
 #include "message.h"
+int init_tcp_socket(argv[1], atoi(argv[2]), 0);
+(struct tcpServer *ts, const char *addr, int port, int max_connections)
+{
+  if (ts != NULL)
+  {
+    ts->addr = strdup(addr);
+    ts->port = port;
+    ts->max_connections = max_connections;
+    int sfd = init_tcp_socket(addr, port, 0);
+    if (sfd == -1 || (ts->efd = epoll_create(max_connections)) == -1)
+    {
+      return -1;
+    }
+    ts->event.data.fd = sfd;
+    ts->event.events = EPOLLIN | EPOLLET;
+    epoll_ctl(ts->efd, EPOLL_CTL_ADD, sfd, &ts->event);
+    ts->connections_events = calloc(max_connections, sizeof(struct epoll_event));
+    if(ts->connections_events==NULL)
+    {
+      close(ts->efd);
+      close(ts->sfd);
+      return -1;
+    }
+    return 0;
+  }
+}
+int tcp_server_start(struct tcpServer *ts)
+{
+}
+void tcp_server_deinit(struct tcpServer *ts)
+{
+}
 int main(int argc, char *argv[])
 {
-  int fd = init_tcp_socket(argv[1], atoi(argv[2]),0);
+  int fd = init_tcp_socket(argv[1], atoi(argv[2]), 0);
   assert(fd != -1);
   int reuse = 0;
   setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (const char *)&reuse, sizeof(int));
@@ -67,7 +100,7 @@ int main(int argc, char *argv[])
         event.data.fd = client_fd;
         event.events = EPOLLIN | EPOLLET;
         epoll_ctl(efd, EPOLL_CTL_ADD, client_fd, &event);
-        fprintf(stdout,"accept \n");
+        fprintf(stdout, "accept \n");
       }
       else
       {
@@ -80,8 +113,8 @@ int main(int argc, char *argv[])
           char *uuid = (char *)&tmp.uuid;
           if (tmp.kind == connection_in)
           {
-            struct connection_message *cm = connection_message_alloc(tmp.kind,uuid);
-            hash_list_insert(list, uuid,cm);
+            struct connection_message *cm = connection_message_alloc(tmp.kind, uuid);
+            hash_list_insert(list, uuid, cm);
             fprintf(stdout, "%s connected\n", (char *)&addr);
           }
           else
