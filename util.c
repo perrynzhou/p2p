@@ -18,7 +18,6 @@
 #include <fcntl.h>
 #include <sys/socket.h>
 #include <sys/types.h>
-#include <uuid/uuid.h>
 #define NET_BACKLOG_LEN (1024)
 static int init_socket(int domain, int type, int protocol, int backlog,
                        const char *addr, int port)
@@ -85,10 +84,4 @@ void fetch_client_address(int client_fd, char *address, size_t address_size)
   strncpy(address, inet_ntoa(addr.sin_addr), address_size);
   size_t alen = strlen((char *)&address);
   snprintf((char *)&address + alen, address_size - alen, ":%d", htons(addr.sin_port));
-}
-int init_uuid(char *buf, size_t buf_size)
-{
-  uuid_t uuid;
-  uuid_generate_time(uuid);
-  snprintf(buf, buf_size, "%s", (char *)uuid);
 }

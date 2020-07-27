@@ -7,6 +7,7 @@
 
 #ifndef _TCP_SERVER_H
 #define _TCP_SERVER_H
+#include "hash_list.h"
 #include <sys/epoll.h>
 typedef struct tcp_server_t
 {
@@ -16,7 +17,7 @@ typedef struct tcp_server_t
   struct epoll_event event;
   struct epoll_event *connections_events;
   hash_list *list;
-}tcp_server;
-int tcp_server_init( tcp_server *ts, const char *addr, int port, int max_connections);
-int tcp_server_run( tcp_server *ts);
+} tcp_server;
+int tcp_server_init(tcp_server *ts, const char *addr, int port, int max_connections);
+int tcp_server_run(tcp_server *ts);
 #endif

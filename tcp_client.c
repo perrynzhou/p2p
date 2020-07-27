@@ -28,20 +28,20 @@ typedef struct tcp_client_t
   hash_list *lt;
   int tcp_sock;
 } tcp_client;
-int tcp_client_print_connection_meta(void *ctx,void *data)
+int tcp_client_print_connection_meta(void *ctx, void *data)
 {
-  connection_meta *meta = ( connection_meta *)data;
+  connection_meta *meta = (connection_meta *)data;
   fprintf(stdout, "%s\n", meta->addr);
 }
 int tcp_client_handle_list_cmd(tcp_client *tc)
 {
-  hash_list_traverse(tc->lt, (hash_list_traverse_cb)tcp_client_print_connection_meta,NULL);
+  hash_list_traverse(tc->lt, (hash_list_traverse_cb)tcp_client_print_connection_meta, NULL);
 }
 static int tcp_client_init_chat_env(udp_server *us, const char *udp_remote_addr, int udp_remote_port)
 {
 
   us->sock = init_udp_socket(udp_remote_addr, udp_remote_port);
-  bzero(us->udp_addr, sizeof(us->udp_addr));
+  bzero(&us->udp_addr, sizeof(us->udp_addr));
   us->udp_addr.sin_family = AF_INET;
   us->udp_addr.sin_port = htons(udp_remote_port);
   us->udp_addr.sin_addr.s_addr = inet_addr(udp_remote_addr);
@@ -76,7 +76,6 @@ static tcp_client *tcp_client_alloc(const char *tcp_remote_addr, int tcp_remote_
   char *ptr = (char *)&buffer;
   snprintf(ptr, 4096, "%s:%d", local_addr, local_port);
   connection_meta *cm = connection_meta_alloc(connection_in, ptr);
-  connection_meta_add_data(cm, ptr, strlen(ptr));
   if (send(client_fd, cm, sizeof(*cm), 0) > 0)
   {
     fprintf(stdout, "handshark success\n");
@@ -94,10 +93,20 @@ int main(int argc, char *argv[])
   char *srv_tcp_addr = argv[1];
   char *local_addr = argv[3];
   int local_port = atoi(argv[4]);
-  tcp_client *tc=tcp_client_alloc(srv_tcp_addr, srv_tcp_port, local_addr, local_port);
+  tcp_client *tc = tcp_client_alloc(srv_tcp_addr, srv_tcp_port, local_addr, local_port);
   pthread_t tid;
-  pthread_create(&tid,NULL,(void *)&tcp_client_cache,tc);
-  
-  pthread_join(tid,NULL);
+  pthread_create(&tid, NULL, (void *)&tcp_client_cache, tc);
+  char *buffer = (char *)calloc(4096, sizeof(char));
+  while (fgets(buffer, 4096, stdin) != NULL)
+  {
+    fprintf(stdout, "enter->");
+    size_t len = strlen(buffer);
+    buffer[len] = '\0';
+    if (strncmp(buffer, "list", 4) == 0)
+    {
+      tcp_client_handle_list_cmd(tc);
+    }
+  }
+  pthread_join(tid, NULL);
   return 0;
 }

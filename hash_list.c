@@ -15,7 +15,7 @@
 #define DM_PARTROUNDS 6  /* 6 gets complete mixing */
 typedef struct hash_list_node_t
 {
-  hash_list_node *next;
+  struct hash_list_node_t *next;
   char *key;
   void *data;
 } hash_list_node;
@@ -118,10 +118,11 @@ static hash_list_node *hash_list_node_alloc(void *data)
   n->data = data;
   return n;
 }
-static void hash_list_node_free(hash_list_node *node,bool flag)
+static void hash_list_node_free(hash_list_node *node, bool flag)
 {
-  if(flag) {
-      free(node->data);
+  if (flag)
+  {
+    free(node->data);
   }
   free(node);
   node = NULL;
@@ -136,12 +137,13 @@ int hash_list_insert(hash_list *list, const char *key, void *item)
     list->arrays[index] = node;
     return 0;
   }
-  hash_list_node *cur = list->arrays[index];
+  hash_list_node *cur = (hash_list_node *)list->arrays[index];
   hash_list_node *prev = NULL;
   int ret = 0;
   while (cur != NULL)
   {
-    if(strncmop(key,cur->key,strlen(key))==0) {
+    if (strncmp(key, cur->key, strlen(key)) == 0)
+    {
       ret = -1;
       break;
     }
@@ -158,14 +160,14 @@ hash_list *hash_list_alloc(size_t max_size)
   lt->arrays = (void **)calloc(max_size, sizeof(void *));
   return lt;
 }
-void * hash_list_remove(hash_list *list, const char *key)
+void *hash_list_remove(hash_list *list, const char *key)
 {
   uint64_t h = hash_gfs(key, strlen(key));
   uint32_t index = h % list->max_size;
   if (list->arrays[index] == NULL)
   {
 
-    return -1;
+    return NULL;
   }
   hash_list_node *cur = list->arrays[index];
   hash_list_node *prev = NULL;
@@ -187,21 +189,23 @@ void * hash_list_remove(hash_list *list, const char *key)
   {
     prev->next = cur->next;
   }
-  if(cur!=NULL) {
-    hash_list_node_free(cur,false);
+  if (cur != NULL)
+  {
+    hash_list_node_free(cur, false);
   }
   return cur;
 }
-void hash_list_traverse(hash_list *list,hash_list_traverse_cb cb,void *ctx)
+void hash_list_traverse(hash_list *list, hash_list_traverse_cb cb, void *ctx)
 {
-  if(list!=NULL && cb!=NULL)
+  if (list != NULL && cb != NULL)
   {
-    for(size_t i=0;i<list->max_size;i++ )
+    for (size_t i = 0; i < list->max_size; i++)
     {
       hash_list_node *cur = list->arrays[i];
-      while(cur!=NULL) {
+      while (cur != NULL)
+      {
         void *data = cur->data;
-        cb(ctx,data);
+        cb(ctx, data);
         cur = cur->next;
       }
     }
