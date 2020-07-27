@@ -52,10 +52,11 @@ int tcp_server_init(tcp_server *ts, const char *addr, int port, int max_connecti
   {
     ts->max_connections = max_connections;
     int sfd = init_tcp_socket(addr, port, 0);
-    if (sfd == -1 || (ts->efd = epoll_create(max_connections)) == -1)
+    if (sfd == -1)
     {
       return -1;
     }
+    ts->efd = epoll_create(max_connections);
     int reuse = 1;
     setsockopt(ts->sfd, SOL_SOCKET, SO_REUSEADDR, (const char *)&reuse, sizeof(int));
     ts->sfd = ts->event.data.fd = sfd;
