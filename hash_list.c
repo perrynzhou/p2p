@@ -12,12 +12,12 @@
 #define DM_DELTA 0x9E3779B9
 #define DM_FULLROUNDS 10 /* 32 is overkill, 16 is strong crypto */
 #define DM_PARTROUNDS 6  /* 6 gets complete mixing */
-struct hash_list_node
+typedef struct hash_list_node_t
 {
-  struct hash_list_node *next;
+  hash_list_node *next;
   char *key;
   void *data;
-};
+} hash_list_node;
 static uint32_t __pad(int len)
 {
   uint32_t pad = 0;
@@ -110,31 +110,31 @@ uint64_t hash_gfs(const char *msg, int len)
 
   return (uint64_t)(h0 ^ h1);
 }
-static struct hash_list_node *hash_list_node_alloc(void *data)
+static hash_list_node *hash_list_node_alloc(void *data)
 {
-  struct hash_list_node *n = (struct hash_list_node *)calloc(1, sizeof(*n));
+  hash_list_node *n = (hash_list_node *)calloc(1, sizeof(*n));
   n->next = NULL;
   n->data = data;
   return n;
 }
-static void hash_list_node_free(struct hash_list_node *node)
+static void hash_list_node_free(hash_list_node *node)
 {
   free(node->data);
   free(node);
   node = NULL;
 }
-int hash_list_insert(struct hash_list *list, const char *key, void *item)
+int hash_list_insert(hash_list *list, const char *key, void *item)
 {
   uint64_t h = hash_gfs(key, strlen(key));
   uint32_t index = h % list->max_size;
-  struct hash_list_node *node = hash_list_node_alloc(item);
+  hash_list_node *node = hash_list_node_alloc(item);
   if (list->arrays[index] == NULL)
   {
     list->arrays[index] = node;
     return 0;
   }
-  struct hash_list_node *cur = list->arrays[index];
-  struct hash_list_node *prev = NULL;
+  hash_list_node *cur = list->arrays[index];
+  hash_list_node *prev = NULL;
   while (cur != NULL)
   {
     cur = cur->next;
@@ -143,14 +143,14 @@ int hash_list_insert(struct hash_list *list, const char *key, void *item)
   prev->next = node;
   return 0;
 }
-struct hash_list *hash_list_alloc(size_t max_size)
+hash_list *hash_list_alloc(size_t max_size)
 {
-  struct hash_list *lt = (struct hash_list *)calloc(1, sizeof(*lt));
+  hash_list *lt = (hash_list *)calloc(1, sizeof(*lt));
   lt->max_size = max_size;
   lt->arrays = (void **)calloc(max_size, sizeof(void *));
   return lt;
 }
-int hash_list_remove(struct hash_list *list, const char *key)
+int hash_list_remove(hash_list *list, const char *key)
 {
   uint64_t h = hash_gfs(key, strlen(key));
   uint32_t index = h % list->max_size;
@@ -159,12 +159,12 @@ int hash_list_remove(struct hash_list *list, const char *key)
 
     return -1;
   }
-  struct hash_list_node *cur = list->arrays[index];
-  struct hash_list_node *prev = NULL;
+  hash_list_node *cur = list->arrays[index];
+  hash_list_node *prev = NULL;
   while (cur != NULL)
   {
 
-    struct hash_list_node *next = cur->next;
+    hash_list_node *next = cur->next;
     char *v = (char *)cur->key;
     if (strncmp(v, key, strlen(v)) == 0)
     {
@@ -186,4 +186,19 @@ int hash_list_remove(struct hash_list *list, const char *key)
   }
   return 0;
 }
-void hash_list_free(struct hash_list *list) {}
+void hash_list_traverse(hash_list *list,hash_list_traverse_cb cb)
+{
+  if(list!=NULL && cb!=NULL)
+  {
+    for(size_t i=0;i<list->max_size;i++ )
+    {
+      hash_list_node *cur = list->arrays[i];
+      while(cur!=NULL) {
+        void *data = cur->data;
+        cb(data);
+        cur = cur->next;
+      }
+    }
+  }
+}
+void hash_list_free(hash_list *list) {}
