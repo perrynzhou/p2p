@@ -8,14 +8,15 @@
 #ifndef _TCP_SERVER_H
 #define _TCP_SERVER_H
 #include <sys/epoll.h>
-struct tcp_server
+typedef struct tcp_server_t
 {
   int efd;
   int sfd;
   uint32_t max_connections;
   struct epoll_event event;
   struct epoll_event *connections_events;
-};
-int tcp_server_init(struct tcp_server *ts, const char *addr, int port, int max_connections);
-int tcp_server_start(struct tcp_server *ts);
+  hash_list *list;
+}tcp_server;
+int tcp_server_init( tcp_server *ts, const char *addr, int port, int max_connections);
+int tcp_server_run( tcp_server *ts);
 #endif

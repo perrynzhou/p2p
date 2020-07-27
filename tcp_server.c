@@ -28,7 +28,24 @@
 #include "util.h"
 #include "hash_list.h"
 #include "message.h"
-int tcp_server_init(struct tcp_server *ts, const char *addr, int port, int max_connections)
+int tcp_server_send_connection_meta(void *ctx, void *data)
+{
+  connection_meta *meta = (connection_meta *)data;
+  int *fd = (int *)ctx;
+  if (send(*fd, meta, sizeof(*meta), 0) > 0)
+  {
+    fprintf(stdout, "push %s to client success\n", meta->addr);
+  }
+  return 0;
+}
+static int tcp_server_push_to_client(tcp_server *ts, int fd,connection_meta *cm)
+{
+  if (ts != NULL && cm != NULL)
+  {
+    hash_list_traverse(ts->list, (hash_list_traverse_cb)&tcp_server_send_connection_meta, &fd);
+  }
+}
+int tcp_server_init(tcp_server *ts, const char *addr, int port, int max_connections)
 {
   if (ts != NULL)
   {
@@ -43,19 +60,19 @@ int tcp_server_init(struct tcp_server *ts, const char *addr, int port, int max_c
     ts->sfd = ts->event.data.fd = sfd;
     ts->event.events = EPOLLIN | EPOLLET;
     epoll_ctl(ts->efd, EPOLL_CTL_ADD, sfd, &ts->event);
-    ts->connections_events = calloc(max_connections, sizeof(struct epoll_event));
+    ts->connections_events = calloc(max_connections, sizeof(epoll_event));
     if (ts->connections_events == NULL)
     {
       close(ts->efd);
       close(ts->sfd);
       return -1;
     }
+    ts->list = hash_list_alloc(4096);
     return 0;
   }
 }
-int tcp_server_start(struct tcp_server *ts)
+int tcp_server_run(tcp_server *ts)
 {
-  struct hash_list *list = hash_list_alloc(4096);
   while (1)
   {
     int n = epoll_wait(ts->efd, ts->connections_events, ts->max_connections, -1);
@@ -90,17 +107,21 @@ int tcp_server_start(struct tcp_server *ts)
         if (count > 0)
         {
           char addr[32] = {'\0'};
+          connection_meta *meta =NULL;
           fetch_client_address(ts->connections_events[i].data.fd, (char *)&addr, 32);
           if (tmp.kind == connection_in)
           {
-            connection_meta *cm = connection_meta_alloc(tmp.kind, (char *)&tmp.addr);
-            hash_list_insert(list, (char *)&tmp.addr, cm);
+            meta = connection_meta_alloc(tmp.kind, (char *)&tmp.addr);
+            hash_list_insert(ts->list, (char *)&tmp.addr, meta);
+            tcp_server_push_to_client(ts,meta,&ts->connections_events[i].data.fd);
             fprintf(stdout, "%s connected\n", (char *)&addr);
           }
           else
           {
-            hash_list_remove(list, (char *)&tmp.addr);
+            meta= hash_list_remove(ts->list, (char *)&tmp.addr);
+            tcp_server_push_to_client(ts,meta,&ts->connections_events[i].data.fd);
             epoll_ctl(ts->efd, EPOLL_CTL_DEL, ts->connections_events[i].data.fd, &ts->event);
+            meta->kind = connection_out;
             fprintf(stdout, "%s leave\n", (char *)&addr);
           }
         }
@@ -110,9 +131,9 @@ int tcp_server_start(struct tcp_server *ts)
 }
 int main(int argc, char *argv[])
 {
-  struct tcp_server ts;
+  tcp_server ts;
   memset(&ts, 0, sizeof(ts));
   tcp_server_init(&ts, argv[1], atoi(argv[2]), 1024);
-  tcp_server_start(&ts);
+  tcp_server_run(&ts);
   return 0;
 }

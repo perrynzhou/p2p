@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdbool.h>
 #define DM_DELTA 0x9E3779B9
 #define DM_FULLROUNDS 10 /* 32 is overkill, 16 is strong crypto */
 #define DM_PARTROUNDS 6  /* 6 gets complete mixing */
@@ -117,9 +118,11 @@ static hash_list_node *hash_list_node_alloc(void *data)
   n->data = data;
   return n;
 }
-static void hash_list_node_free(hash_list_node *node)
+static void hash_list_node_free(hash_list_node *node,bool flag)
 {
-  free(node->data);
+  if(flag) {
+      free(node->data);
+  }
   free(node);
   node = NULL;
 }
@@ -135,13 +138,18 @@ int hash_list_insert(hash_list *list, const char *key, void *item)
   }
   hash_list_node *cur = list->arrays[index];
   hash_list_node *prev = NULL;
+  int ret = 0;
   while (cur != NULL)
   {
+    if(strncmop(key,cur->key,strlen(key))==0) {
+      ret = -1;
+      break;
+    }
     cur = cur->next;
     prev = cur;
   }
   prev->next = node;
-  return 0;
+  return ret;
 }
 hash_list *hash_list_alloc(size_t max_size)
 {
@@ -150,7 +158,7 @@ hash_list *hash_list_alloc(size_t max_size)
   lt->arrays = (void **)calloc(max_size, sizeof(void *));
   return lt;
 }
-int hash_list_remove(hash_list *list, const char *key)
+void * hash_list_remove(hash_list *list, const char *key)
 {
   uint64_t h = hash_gfs(key, strlen(key));
   uint32_t index = h % list->max_size;
@@ -163,7 +171,6 @@ int hash_list_remove(hash_list *list, const char *key)
   hash_list_node *prev = NULL;
   while (cur != NULL)
   {
-
     hash_list_node *next = cur->next;
     char *v = (char *)cur->key;
     if (strncmp(v, key, strlen(v)) == 0)
@@ -180,13 +187,12 @@ int hash_list_remove(hash_list *list, const char *key)
   {
     prev->next = cur->next;
   }
-  if (cur != NULL)
-  {
-    cur = NULL;
+  if(cur!=NULL) {
+    hash_list_node_free(cur,false);
   }
-  return 0;
+  return cur;
 }
-void hash_list_traverse(hash_list *list,hash_list_traverse_cb cb)
+void hash_list_traverse(hash_list *list,hash_list_traverse_cb cb,void *ctx)
 {
   if(list!=NULL && cb!=NULL)
   {
@@ -195,7 +201,7 @@ void hash_list_traverse(hash_list *list,hash_list_traverse_cb cb)
       hash_list_node *cur = list->arrays[i];
       while(cur!=NULL) {
         void *data = cur->data;
-        cb(data);
+        cb(ctx,data);
         cur = cur->next;
       }
     }
