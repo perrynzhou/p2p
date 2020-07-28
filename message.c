@@ -10,18 +10,24 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+void connection_meta_reset(connection_meta *meta, int kind, const char *addr)
+{
+  meta->kind = kind;
+  if(addr !=NULL) {
+      snprintf((char *)meta->addr, 128, "%s", addr);
+  }
+}
 connection_meta *connection_meta_alloc(int kind, const char *addr)
 {
-  connection_meta *cm = calloc(1, sizeof(connection_meta));
-  cm->kind = kind;
-  snprintf((char *)cm->addr, 128, "%s", addr);
-  return cm;
+  connection_meta *meta = calloc(1, sizeof(connection_meta));
+  connection_meta_reset(meta, kind, addr);
+  return meta;
 }
-void connection_meta_free(connection_meta *cm)
+void connection_meta_free(connection_meta *meta)
 {
-  if (cm != NULL)
+  if (meta != NULL)
   {
-    free(cm);
-    cm = NULL;
+    free(meta);
+    meta = NULL;
   }
 }

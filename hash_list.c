@@ -111,11 +111,12 @@ uint64_t hash_gfs(const char *msg, int len)
 
   return (uint64_t)(h0 ^ h1);
 }
-static hash_list_node *hash_list_node_alloc(void *data)
+static hash_list_node *hash_list_node_alloc(const char *key,void *data)
 {
   hash_list_node *n = (hash_list_node *)calloc(1, sizeof(*n));
   n->next = NULL;
   n->data = data;
+  n->key = strdup(key);
   return n;
 }
 static void hash_list_node_free(hash_list_node *node, bool flag)
@@ -124,6 +125,7 @@ static void hash_list_node_free(hash_list_node *node, bool flag)
   {
     free(node->data);
   }
+  free(node->key);
   free(node);
   node = NULL;
 }
@@ -131,7 +133,7 @@ int hash_list_insert(hash_list *list, const char *key, void *item)
 {
   uint64_t h = hash_gfs(key, strlen(key));
   uint32_t index = h % list->max_size;
-  hash_list_node *node = hash_list_node_alloc(item);
+  hash_list_node *node = hash_list_node_alloc(key,item);
   if (list->arrays[index] == NULL)
   {
     list->arrays[index] = node;
@@ -162,6 +164,7 @@ hash_list *hash_list_alloc(size_t max_size)
 }
 void *hash_list_remove(hash_list *list, const char *key)
 {
+  void *data = NULL;
   uint64_t h = hash_gfs(key, strlen(key));
   uint32_t index = h % list->max_size;
   if (list->arrays[index] == NULL)
@@ -191,9 +194,10 @@ void *hash_list_remove(hash_list *list, const char *key)
   }
   if (cur != NULL)
   {
+    data = cur->data;
     hash_list_node_free(cur, false);
   }
-  return cur;
+  return data;
 }
 void hash_list_traverse(hash_list *list, hash_list_traverse_cb cb, void *ctx)
 {

@@ -26,5 +26,6 @@ typedef struct message_t
    char data[0];
 } message;
 connection_meta *connection_meta_alloc(int kind, const char *addr);
-void connection_meta_free(connection_meta *cm);
+void connection_meta_reset(connection_meta *meta,int kind, const char *addr);
+void connection_meta_free(connection_meta *meta);
 #endif

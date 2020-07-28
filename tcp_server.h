@@ -17,6 +17,7 @@ typedef struct tcp_server_t
   struct epoll_event event;
   struct epoll_event *connections_events;
   hash_list *list;
+  int  *fd;
 } tcp_server;
 int tcp_server_init(tcp_server *ts, const char *addr, int port, int max_connections);
 int tcp_server_run(tcp_server *ts);
