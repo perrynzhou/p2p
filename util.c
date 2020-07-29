@@ -49,10 +49,10 @@ static int init_socket(int domain, int type, int protocol, int backlog,
 }
 int init_tcp_client(const char *addr, int port)
 {
-  int sock = socket(AF_INET, SOCK_STREAM, 0);
+  int sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
   if (sock != -1)
   {
-     struct sockaddr_in srvaddr;
+    struct sockaddr_in srvaddr;
     srvaddr.sin_family = AF_INET;
     srvaddr.sin_port = htons(port);
     if (inet_pton(AF_INET, addr, &srvaddr.sin_addr) <= 0)
@@ -73,11 +73,11 @@ int init_tcp_client(const char *addr, int port)
 int init_tcp_socket(const char *addr, int port, int backlog)
 {
   int real_backlog = (backlog < NET_BACKLOG_LEN) ? NET_BACKLOG_LEN : backlog;
-  return init_socket(AF_INET, SOCK_STREAM, 0, real_backlog, addr, port);
+  return init_socket(AF_INET, SOCK_STREAM, IPPROTO_TCP, real_backlog, addr, port);
 }
 int init_udp_socket(const char *addr, int port)
 {
-  return init_socket(AF_INET, SOCK_DGRAM, 0, 0, addr, port);
+  return init_socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP, 0, addr, port);
 }
 int set_tcp_nonblock(int fd)
 {
@@ -93,7 +93,7 @@ void fetch_ip_address_from_fd(int client_fd, char *address, size_t address_size)
   size_t alen = strlen((char *)&address);
   snprintf((char *)&address + alen, address_size - alen, ":%d", htons(addr.sin_port));
 }
-void  fetch_ip_address_from_localhost(char *buf, size_t buf_size)
+void fetch_ip_address_from_localhost(char *buf, size_t buf_size)
 {
   struct ifaddrs *ifaddr, *ifa;
   int family, s;
@@ -116,7 +116,7 @@ void  fetch_ip_address_from_localhost(char *buf, size_t buf_size)
       {
         break;
       }
-      bzero(buf,buf_size);
+      bzero(buf, buf_size);
     }
     freeifaddrs(ifaddr);
   }

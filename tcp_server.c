@@ -28,27 +28,62 @@
 #include "util.h"
 #include "hash_list.h"
 #include "message.h"
-int tcp_server_send_connection_meta(void *ctx, void *data)
+inline static int tcp_server_send_connection_meta(void *ctx, void *data)
 {
   connection_meta *meta = (connection_meta *)data;
   int *fd = (int *)ctx;
-  if (send(*fd, meta, sizeof(*meta), 0) > 0)
+  if (send(*fd, meta, sizeof(*meta), MSG_DONTWAIT) > 0)
   {
-    fprintf(stdout, "push %s to client success\n", meta->addr);
+    fprintf(stderr, "push %s to client success\n", meta->addr);
+    return 0;
   }
+  return -1;
+}
+inline static int tcp_server_cache_clients(void *ctx, void *data)
+{
+  connection_meta *meta = (connection_meta *)data;
+  hash_list *list = (hash_list *)ctx;
+  hash_list_insert(list, meta->addr, meta);
   return 0;
 }
-static int tcp_server_push_to_client(tcp_server *ts, connection_meta *cm)
+static void tcp_server_push_in_to_client(tcp_server *ts, connection_meta *meta, int index)
 {
-  if (ts != NULL && cm != NULL)
+  hash_list *cache = ts->caches[index].client_list;
+  if (cache->cur_size == 0)
   {
-    for (int i = 0; i < ts->max_connections; i++)
+    hash_list_traverse(ts->list, tcp_server_cache_clients, cache);
+    hash_list_traverse(cache, tcp_server_send_connection_meta, &ts->caches[index].fd);
+  }
+  for (int i = ts->sfd + 1; i < ts->cache_size; i++)
+  {
+    if (cache != NULL && index != i && ts->caches[i].fd != -1)
     {
-      int client_fd = ts->fd[i];
-      if (client_fd != 0)
+      hash_list *cache = ts->caches[i].client_list;
+      if (cache != NULL && cache->cur_size > 0)
       {
-        hash_list_traverse(ts->list, (hash_list_traverse_cb)&tcp_server_send_connection_meta, &client_fd);
+        tcp_server_send_connection_meta(&ts->caches[i].fd, meta);
+        hash_list_insert(cache, meta->addr, meta);
       }
+    }
+  }
+}
+static int tcp_server_push_out_to_client(tcp_server *ts, connection_meta *meta, int index)
+{
+  hash_list *cache = ts->caches[index].client_list;
+  meta->kind = connection_out;
+  tcp_server_send_connection_meta(&ts->caches[index].fd, meta);
+  int curr_fd = ts->caches[index].fd;
+  ts->caches[index].fd = -1;
+  hash_list_free(ts->caches[index].client_list, NULL);
+  ts->caches[index].client_list = NULL;
+  for (int i = ts->efd + 1; i < ts->cache_size; i++)
+  {
+    tcp_client_cache_item *item = &ts->caches[i];
+    cache = ts->caches[i].client_list;
+    if (cache != NULL && cache->cur_size > 0 && item->fd != -1 && item->fd != curr_fd)
+    {
+      hash_list_remove(cache, (char *)&meta->addr);
+      tcp_server_send_connection_meta(&ts->caches[i].fd, meta);
     }
   }
 }
@@ -63,7 +98,13 @@ int tcp_server_init(tcp_server *ts, const char *addr, int port, int max_connecti
       return -1;
     }
     ts->efd = epoll_create(max_connections);
-    ts->fd = (int *)calloc(max_connections, sizeof(int));
+    ts->cache_size = 65535;
+    ts->caches = (tcp_client_cache_item *)calloc(ts->cache_size, sizeof(tcp_client_cache_item));
+    for (size_t i = 0; i < max_connections; i++)
+    {
+      ts->caches[i].fd = -1;
+      ts->caches[i].client_list = NULL;
+    }
     int reuse = 1;
     setsockopt(ts->sfd, SOL_SOCKET, SO_REUSEADDR, (const char *)&reuse, sizeof(int));
     ts->sfd = ts->event.data.fd = sfd;
@@ -76,7 +117,7 @@ int tcp_server_init(tcp_server *ts, const char *addr, int port, int max_connecti
       close(ts->sfd);
       return -1;
     }
-    ts->list = hash_list_alloc(4096);
+    ts->list = hash_list_alloc(max_connections);
     return 0;
   }
 }
@@ -109,6 +150,7 @@ int tcp_server_run(tcp_server *ts)
       }
       else
       {
+        int clientfd = ts->connections_events[i].data.fd;
         connection_meta tmp;
 
         ssize_t count = recv(ts->connections_events[i].data.fd, &tmp, sizeof(tmp), 0);
@@ -119,20 +161,23 @@ int tcp_server_run(tcp_server *ts)
           fetch_ip_address_from_fd(ts->connections_events[i].data.fd, (char *)&addr, 32);
           if (tmp.kind == connection_in)
           {
-            ts->fd[i] = ts->connections_events[i].data.fd;
+            if (ts->caches[clientfd].fd == -1)
+            {
+              ts->caches[clientfd].fd = clientfd;
+              ts->caches[clientfd].client_list = hash_list_alloc(ts->max_connections);
+            }
             meta = connection_meta_alloc(tmp.kind, (char *)&tmp.addr);
             hash_list_insert(ts->list, (char *)tmp.addr, (void *)meta);
-            tcp_server_push_to_client(ts,  meta);
-            fprintf(stdout, "%s connected\n", (char *)&addr);
+            tcp_server_push_in_to_client(ts, meta, clientfd);
+            fprintf(stdout, "fd=%d %s connected\n", clientfd, (char *)&addr);
           }
           else
           {
             meta = hash_list_remove(ts->list, (char *)&tmp.addr);
-            tcp_server_push_to_client(ts,  meta);
+            tcp_server_push_out_to_client(ts, meta, clientfd);
             epoll_ctl(ts->efd, EPOLL_CTL_DEL, ts->connections_events[i].data.fd, &ts->event);
             connection_meta_free(meta);
-            ts->fd[i] = 0;
-            fprintf(stdout, "%s leave\n", (char *)&addr);
+            fprintf(stdout, "fd=%d %s leave\n", clientfd, (char *)&addr);
           }
         }
       }

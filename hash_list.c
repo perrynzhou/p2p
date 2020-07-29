@@ -111,7 +111,7 @@ uint64_t hash_gfs(const char *msg, int len)
 
   return (uint64_t)(h0 ^ h1);
 }
-static hash_list_node *hash_list_node_alloc(const char *key,void *data)
+static hash_list_node *hash_list_node_alloc(const char *key, void *data)
 {
   hash_list_node *n = (hash_list_node *)calloc(1, sizeof(*n));
   n->next = NULL;
@@ -133,9 +133,10 @@ int hash_list_insert(hash_list *list, const char *key, void *item)
 {
   uint64_t h = hash_gfs(key, strlen(key));
   uint32_t index = h % list->max_size;
-  hash_list_node *node = hash_list_node_alloc(key,item);
+  hash_list_node *node = hash_list_node_alloc(key, item);
   if (list->arrays[index] == NULL)
   {
+    list->cur_size++;
     list->arrays[index] = node;
     return 0;
   }
@@ -152,6 +153,7 @@ int hash_list_insert(hash_list *list, const char *key, void *item)
     cur = cur->next;
     prev = cur;
   }
+  list->cur_size++;
   prev->next = node;
   return ret;
 }
@@ -159,11 +161,38 @@ hash_list *hash_list_alloc(size_t max_size)
 {
   hash_list *lt = (hash_list *)calloc(1, sizeof(*lt));
   lt->max_size = max_size;
+  lt->cur_size = 0;
   lt->arrays = (void **)calloc(max_size, sizeof(void *));
   return lt;
 }
+int hash_list_exists(hash_list *list, const char *key)
+{
+  uint64_t h = hash_gfs(key, strlen(key));
+  uint32_t index = h % list->max_size;
+  if (list->arrays[index] == NULL)
+  {
+
+    return -1;
+  }
+  hash_list_node *cur = list->arrays[index];
+  while (cur != NULL)
+  {
+    hash_list_node *next = cur->next;
+    char *v = (char *)cur->key;
+    if (strncmp(v, key, strlen(v)) == 0)
+    {
+      return 1;
+    }
+    cur = next;
+  }
+  return 0;
+}
 void *hash_list_remove(hash_list *list, const char *key)
 {
+  if (list == NULL || key == NULL)
+  {
+    return NULL;
+  }
   void *data = NULL;
   uint64_t h = hash_gfs(key, strlen(key));
   uint32_t index = h % list->max_size;
@@ -180,6 +209,7 @@ void *hash_list_remove(hash_list *list, const char *key)
     char *v = (char *)cur->key;
     if (strncmp(v, key, strlen(v)) == 0)
     {
+      data = cur->data;
       break;
     }
     else
@@ -192,9 +222,13 @@ void *hash_list_remove(hash_list *list, const char *key)
   {
     prev->next = cur->next;
   }
+  else
+  {
+    list->arrays[index] = cur->next;
+  }
   if (cur != NULL)
   {
-    data = cur->data;
+    list->cur_size--;
     hash_list_node_free(cur, false);
   }
   return data;
@@ -215,4 +249,30 @@ void hash_list_traverse(hash_list *list, hash_list_traverse_cb cb, void *ctx)
     }
   }
 }
-void hash_list_free(hash_list *list) {}
+void hash_list_free(hash_list *list, hash_list_data_free_cb free_cb)
+{
+  if (list != NULL)
+  {
+    for (size_t i = 0; i < list->max_size; i++)
+    {
+      hash_list_node *cur = list->arrays[i];
+      while (cur != NULL)
+      {
+        hash_list_node *next = cur->next;
+        if (free_cb != NULL)
+        {
+          free_cb(cur->data);
+        }
+        hash_list_node_free(cur, false);
+        cur = next;
+        list->cur_size--;
+      }
+    }
+    if (list->arrays != NULL)
+    {
+      free(list->arrays);
+      list->arrays = NULL;
+    }
+    free(list);
+  }
+}

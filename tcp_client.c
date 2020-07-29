@@ -84,9 +84,9 @@ tcp_client *tcp_client_alloc(const char *name, int sockfd, int hash_list_max_siz
 }
 int tcp_client_send(tcp_client *client, int conection_type)
 {
-  connection_meta_reset(&client->meta,conection_type,client->name);
-  int  ret = -1;
-  if ((ret=send(client->tcp_sock, &client->meta, sizeof(client->meta), 0)) > 0)
+  connection_meta_reset(&client->meta, conection_type, client->name);
+  int ret = -1;
+  if ((ret = send(client->tcp_sock, &client->meta, sizeof(client->meta), 0)) > 0)
   {
     if (conection_type == connection_in)
     {
@@ -129,7 +129,7 @@ static void tcp_client_handle_input(tcp_client *client, char **buf)
       tcp_client_send(client, connection_out);
       break;
     }
-  fprintf(stdout, "enter->");
+    fprintf(stdout, "enter->");
   }
   if (*buf != NULL)
   {
@@ -143,7 +143,7 @@ void tcp_client_free(tcp_client *client)
   {
     if (client->list != NULL)
     {
-      hash_list_free(client->list);
+      hash_list_free(client->list, (hash_list_data_free_cb)connection_meta_free);
       client->list = NULL;
     }
     if (client->name != NULL)
