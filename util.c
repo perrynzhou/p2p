@@ -18,7 +18,8 @@
 #include <fcntl.h>
 #include <sys/socket.h>
 #include <sys/types.h>
-#include <uuid/uuid.h>
+#include <netdb.h>
+#include <ifaddrs.h>
 #define NET_BACKLOG_LEN (1024)
 static int init_socket(int domain, int type, int protocol, int backlog,
                        const char *addr, int port)
@@ -29,6 +30,12 @@ static int init_socket(int domain, int type, int protocol, int backlog,
     struct sockaddr_in serveraddr;
     serveraddr.sin_family = domain;
     serveraddr.sin_port = htons(port);
+    if (inet_pton(AF_INET, addr, &serveraddr.sin_addr) <= 0)
+    {
+      close(sock);
+      printf("inet_pton error for %s\n", addr);
+      return -1;
+    }
     bind(sock, (struct sockaddr *)&serveraddr, sizeof(serveraddr));
     if (type == SOCK_STREAM)
     {
@@ -42,7 +49,7 @@ static int init_socket(int domain, int type, int protocol, int backlog,
 }
 int init_tcp_client(const char *addr, int port)
 {
-  int sock = socket(AF_INET, SOCK_STREAM, 0);
+  int sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
   if (sock != -1)
   {
     struct sockaddr_in srvaddr;
@@ -66,18 +73,18 @@ int init_tcp_client(const char *addr, int port)
 int init_tcp_socket(const char *addr, int port, int backlog)
 {
   int real_backlog = (backlog < NET_BACKLOG_LEN) ? NET_BACKLOG_LEN : backlog;
-  return init_socket(AF_INET, SOCK_STREAM, 0, real_backlog, addr, port);
+  return init_socket(AF_INET, SOCK_STREAM, IPPROTO_TCP, real_backlog, addr, port);
 }
 int init_udp_socket(const char *addr, int port)
 {
-  return init_socket(AF_INET, SOCK_DGRAM, 0, 0, addr, port);
+  return init_socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP, 0, addr, port);
 }
 int set_tcp_nonblock(int fd)
 {
   int fl = fcntl(fd, F_GETFL);
   return fcntl(fd, F_SETFL, fl | O_NONBLOCK);
 }
-void fetch_client_address(int client_fd, char *address, size_t address_size)
+void fetch_ip_address_from_fd(int client_fd, char *address, size_t address_size)
 {
   struct sockaddr_in addr;
   socklen_t addr_size = sizeof(struct sockaddr_in);
@@ -86,9 +93,31 @@ void fetch_client_address(int client_fd, char *address, size_t address_size)
   size_t alen = strlen((char *)&address);
   snprintf((char *)&address + alen, address_size - alen, ":%d", htons(addr.sin_port));
 }
-int init_uuid(char *buf, size_t buf_size)
+void fetch_ip_address_from_localhost(char *buf, size_t buf_size)
 {
-  uuid_t uuid;
-  uuid_generate_time(uuid);
-  snprintf(buf, buf_size, "%s", (char *)uuid);
+  struct ifaddrs *ifaddr, *ifa;
+  int family, s;
+  if (getifaddrs(&ifaddr) != -1)
+  {
+    const char *local_address = "127.0.0.1";
+    size_t local_address_len = strlen(local_address);
+    for (ifa = ifaddr; ifa != NULL; ifa = ifa->ifa_next)
+    {
+      if (ifa->ifa_addr == NULL)
+      {
+        continue;
+      }
+      s = getnameinfo(ifa->ifa_addr, sizeof(struct sockaddr_in), buf, NI_MAXHOST, NULL, 0, NI_NUMERICHOST);
+      if (s != 0)
+      {
+        continue;
+      }
+      if (ifa->ifa_addr->sa_family == AF_INET && strncmp(buf, local_address, local_address_len) != 0)
+      {
+        break;
+      }
+      bzero(buf, buf_size);
+    }
+    freeifaddrs(ifaddr);
+  }
 }

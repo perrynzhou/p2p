@@ -10,17 +10,24 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-struct connection_message *connection_message_alloc(int kind,char *uuid)
+void connection_meta_reset(connection_meta *meta, int kind, const char *addr)
 {
-  struct connection_message *cm = calloc(1,sizeof(struct connection_message));
-  strncpy((char *)&cm->uuid,uuid,strlen(uuid));
-  cm->kind=kind;
-  return cm;
+  meta->kind = kind;
+  if(addr !=NULL) {
+      snprintf((char *)meta->addr, 128, "%s", addr);
+  }
 }
-void connection_message_free(struct connection_message *cm)
+connection_meta *connection_meta_alloc(int kind, const char *addr)
 {
-  if(cm!=NULL) {
-    free(cm);
-    cm = NULL;
+  connection_meta *meta = calloc(1, sizeof(connection_meta));
+  connection_meta_reset(meta, kind, addr);
+  return meta;
+}
+void connection_meta_free(connection_meta *meta)
+{
+  if (meta != NULL)
+  {
+    free(meta);
+    meta = NULL;
   }
 }

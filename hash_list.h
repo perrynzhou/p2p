@@ -10,14 +10,18 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <pthread.h>
-struct hash_list
+typedef int (*hash_list_traverse_cb)(void *, void *);
+typedef int (*hash_list_data_free_cb)(void *);
+typedef struct hash_list_t
 {
   size_t max_size;
+  size_t cur_size;
   void **arrays;
-  pthread_mutex_t mutx;
-} ;
-struct hash_list *hash_list_alloc(size_t max_size);
-int hash_list_insert(struct hash_list *list, const char *key, void *item);
-int hash_list_remove(struct hash_list *list, const char *key);
-void hash_list_free(struct hash_list *list);
+} hash_list;
+hash_list *hash_list_alloc(size_t max_size);
+int hash_list_insert(hash_list *list, const char *key, void *item);
+void *hash_list_remove(hash_list *list, const char *key);
+void hash_list_traverse(hash_list *list, hash_list_traverse_cb cb, void *ctx);
+int hash_list_exists(hash_list *list, const char *key);
+void hash_list_free(hash_list *list, hash_list_data_free_cb free_cb);
 #endif
