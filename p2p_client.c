@@ -18,14 +18,10 @@
 #include <arpa/inet.h>
 #include <sys/types.h>
 #include <sys/socket.h>
-typedef struct udp_server_t
+int p2p_client_send_message(void *message_ptr, void *key_ptr)
 {
-  int sock;
-  struct sockaddr_in udp_addr;
-} udp_server;
-
-void p2p_client_send_message(const char *key, char *message, size_t message_size)
-{
+  char *key = key_ptr;
+  char *message = message_ptr;
   char buffer[128] = {'\0'};
   snprintf((char *)buffer, 128, "%s", key);
   char *string = (char *)&buffer;
@@ -35,7 +31,7 @@ void p2p_client_send_message(const char *key, char *message, size_t message_size
   bzero(&addrsrv, sizeof(addrsrv));
   int udp_sock = init_udp_socket(addr, port, &addrsrv);
   socklen_t len = sizeof(addrsrv);
-  if (sendto(udp_sock, message, message_size, 0, (struct sockaddr *)&addrsrv, len) < 0)
+  if (sendto(udp_sock, message, strlen(message), 0, (struct sockaddr *)&addrsrv, len) < 0)
   {
     close(udp_sock);
     fprintf(stdout, "send message failed:%s\n", strerror(errno));
@@ -44,6 +40,7 @@ void p2p_client_send_message(const char *key, char *message, size_t message_size
   {
     close(udp_sock);
   }
+  return 0;
 }
 
 int p2p_client_print_connection_meta(void *ctx, void *data)
@@ -55,6 +52,7 @@ int p2p_client_handle_list_cmd(p2p_client *client)
 {
   hash_list_traverse(client->list, (hash_list_traverse_cb)p2p_client_print_connection_meta, NULL);
 }
+
 static void *p2p_client_cache(p2p_client *client)
 {
   connection_meta *meta = NULL;
@@ -97,9 +95,7 @@ static void *p2p_client_rev_msg(p2p_client *client)
     if (count > 0)
     {
       buffer[count - 1] = '\0';
-      inet_ntop(AF_INET, &src_addr.sin_addr, (char *)&ipaddr, sizeof(ipaddr));
-      int port = ntohs(src_addr.sin_port);
-      fprintf(stderr, "::recv message=%s from %s:%d\n", (char *)&buffer, (char *)&ipaddr, port);
+      fprintf(stderr, "::recv=%s\n", (char *)&buffer);
     }
   }
   return NULL;
@@ -146,6 +142,16 @@ inline static void p2p_client_notify(p2p_client *client)
   pthread_create(&client->input_thd, NULL, (void *)&p2p_client_cache, client);
   pthread_create(&client->input_thd, NULL, (void *)&p2p_client_rev_msg, client);
 }
+int p2p_client_broadcast(void *message, connection_meta *meta)
+{
+  char buffer[4096] = {'\0'};
+  snprintf((char *)&buffer, 4096, "%s", (char *)meta->addr);
+  return p2p_client_send_message(message, (char *)&buffer);
+}
+int p2p_client_handle_all_cmd(p2p_client *client, void *message)
+{
+  hash_list_traverse(client->list, (hash_list_traverse_cb)p2p_client_broadcast, message);
+}
 static void p2p_client_handle_input(p2p_client *client, char **buf)
 {
   *buf = (char *)calloc(4096, sizeof(char));
@@ -173,7 +179,14 @@ static void p2p_client_handle_input(p2p_client *client, char **buf)
       char *msg = strsep(&buffer_ptr, " ");
       if (strncmp(cmd, "send", 4) == 0)
       {
-        p2p_client_send_message(key, msg, strlen(msg));
+        if (strncmp(key, "all", 3) != 0)
+        {
+          p2p_client_send_message(msg, key);
+        }
+        else
+        {
+          p2p_client_handle_all_cmd(client, msg);
+        }
       }
     }
     fprintf(stdout, "enter->");
