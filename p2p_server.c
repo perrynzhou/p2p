@@ -1,11 +1,11 @@
 /*************************************************************************
-  > File Name: tcp_server.c
+  > File Name: p2p_server.c
   > Author:perrynzhou 
   > Mail:perrynzhou@gmail.com 
   > Created Time: Friday, July 03, 2020 PM02:24:38 HKT
  ************************************************************************/
 
-#include "tcp_server.h"
+#include "p2p_server.h"
 #include "message.h"
 #include <stdio.h>
 #include <time.h>
@@ -28,7 +28,7 @@
 #include "util.h"
 #include "hash_list.h"
 #include "message.h"
-inline static int tcp_server_send_connection_meta(void *ctx, void *data)
+inline static int p2p_server_send_connection_meta(void *ctx, void *data)
 {
   connection_meta *meta = (connection_meta *)data;
   int *fd = (int *)ctx;
@@ -39,20 +39,20 @@ inline static int tcp_server_send_connection_meta(void *ctx, void *data)
   }
   return -1;
 }
-inline static int tcp_server_cache_clients(void *ctx, void *data)
+inline static int p2p_server_cache_clients(void *ctx, void *data)
 {
   connection_meta *meta = (connection_meta *)data;
   hash_list *list = (hash_list *)ctx;
   hash_list_insert(list, meta->addr, meta);
   return 0;
 }
-static void tcp_server_push_in_to_client(tcp_server *ts, connection_meta *meta, int index)
+static void p2p_server_push_in_to_client(p2p_server *ts, connection_meta *meta, int index)
 {
   hash_list *cache = ts->caches[index].client_list;
   if (cache->cur_size == 0)
   {
-    hash_list_traverse(ts->list, tcp_server_cache_clients, cache);
-    hash_list_traverse(cache, tcp_server_send_connection_meta, &ts->caches[index].fd);
+    hash_list_traverse(ts->list, p2p_server_cache_clients, cache);
+    hash_list_traverse(cache, p2p_server_send_connection_meta, &ts->caches[index].fd);
   }
   for (int i = ts->sfd + 1; i < ts->cache_size; i++)
   {
@@ -61,33 +61,33 @@ static void tcp_server_push_in_to_client(tcp_server *ts, connection_meta *meta, 
       hash_list *cache = ts->caches[i].client_list;
       if (cache != NULL && cache->cur_size > 0)
       {
-        tcp_server_send_connection_meta(&ts->caches[i].fd, meta);
+        p2p_server_send_connection_meta(&ts->caches[i].fd, meta);
         hash_list_insert(cache, meta->addr, meta);
       }
     }
   }
 }
-static int tcp_server_push_out_to_client(tcp_server *ts, connection_meta *meta, int index)
+static int p2p_server_push_out_to_client(p2p_server *ts, connection_meta *meta, int index)
 {
   hash_list *cache = ts->caches[index].client_list;
   meta->kind = connection_out;
-  tcp_server_send_connection_meta(&ts->caches[index].fd, meta);
+  p2p_server_send_connection_meta(&ts->caches[index].fd, meta);
   int curr_fd = ts->caches[index].fd;
   ts->caches[index].fd = -1;
   hash_list_free(ts->caches[index].client_list, NULL);
   ts->caches[index].client_list = NULL;
   for (int i = ts->efd + 1; i < ts->cache_size; i++)
   {
-    tcp_client_cache_item *item = &ts->caches[i];
+    p2p_client_cache_item *item = &ts->caches[i];
     cache = ts->caches[i].client_list;
     if (cache != NULL && cache->cur_size > 0 && item->fd != -1 && item->fd != curr_fd)
     {
       hash_list_remove(cache, (char *)&meta->addr);
-      tcp_server_send_connection_meta(&ts->caches[i].fd, meta);
+      p2p_server_send_connection_meta(&ts->caches[i].fd, meta);
     }
   }
 }
-int tcp_server_init(tcp_server *ts, const char *addr, int port, int max_connections)
+int p2p_server_init(p2p_server *ts, const char *addr, int port, int max_connections)
 {
   if (ts != NULL)
   {
@@ -99,7 +99,7 @@ int tcp_server_init(tcp_server *ts, const char *addr, int port, int max_connecti
     }
     ts->efd = epoll_create(max_connections);
     ts->cache_size = 65535;
-    ts->caches = (tcp_client_cache_item *)calloc(ts->cache_size, sizeof(tcp_client_cache_item));
+    ts->caches = (p2p_client_cache_item *)calloc(ts->cache_size, sizeof(p2p_client_cache_item));
     for (size_t i = 0; i < max_connections; i++)
     {
       ts->caches[i].fd = -1;
@@ -121,7 +121,7 @@ int tcp_server_init(tcp_server *ts, const char *addr, int port, int max_connecti
     return 0;
   }
 }
-int tcp_server_run(tcp_server *ts)
+int p2p_server_run(p2p_server *ts)
 {
   while (1)
   {
@@ -168,13 +168,13 @@ int tcp_server_run(tcp_server *ts)
             }
             meta = connection_meta_alloc(tmp.kind, (char *)&tmp.addr);
             hash_list_insert(ts->list, (char *)tmp.addr, (void *)meta);
-            tcp_server_push_in_to_client(ts, meta, clientfd);
+            p2p_server_push_in_to_client(ts, meta, clientfd);
             fprintf(stdout, "fd=%d %s connected\n", clientfd, (char *)&addr);
           }
           else
           {
             meta = hash_list_remove(ts->list, (char *)&tmp.addr);
-            tcp_server_push_out_to_client(ts, meta, clientfd);
+            p2p_server_push_out_to_client(ts, meta, clientfd);
             epoll_ctl(ts->efd, EPOLL_CTL_DEL, ts->connections_events[i].data.fd, &ts->event);
             connection_meta_free(meta);
             fprintf(stdout, "fd=%d %s disconnected\n", clientfd, (char *)&addr);
@@ -186,11 +186,11 @@ int tcp_server_run(tcp_server *ts)
 }
 int main(int argc, char *argv[])
 {
-  tcp_server ts;
+  p2p_server ts;
   memset(&ts, 0, sizeof(ts));
   char local_addr[128] = {'\0'};
   fetch_ip_address_from_localhost((char *)&local_addr, 128);
-  tcp_server_init(&ts, (char *)&local_addr, atoi(argv[1]), 1024);
-  tcp_server_run(&ts);
+  p2p_server_init(&ts, (char *)&local_addr, atoi(argv[1]), 1024);
+  p2p_server_run(&ts);
   return 0;
 }

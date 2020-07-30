@@ -1,19 +1,19 @@
 /*************************************************************************
-    > File Name: tcp_server.h
+    > File Name: p2p_server.h
   > Author:perrynzhou 
   > Mail:perrynzhou@gmail.com 
   > Created Time: Sun 26 Jul 2020 07:44:00 PM CST
  ************************************************************************/
 
-#ifndef _TCP_SERVER_H
-#define _TCP_SERVER_H
+#ifndef _P2P_SERVER_H
+#define _P2P_SERVER_H
 #include "hash_list.h"
 #include <sys/epoll.h>
-typedef struct tcp_client_cache_item_t {
+typedef struct p2p_client_cache_item_t {
   int fd;
   hash_list *client_list;
-}tcp_client_cache_item;
-typedef struct tcp_server_t
+}p2p_client_cache_item;
+typedef struct p2p_server_t
 {
   int efd;
   int sfd;
@@ -22,8 +22,8 @@ typedef struct tcp_server_t
   struct epoll_event *connections_events;
   hash_list *list;
   uint32_t cache_size;
-  tcp_client_cache_item *caches;
-} tcp_server;
-int tcp_server_init(tcp_server *ts, const char *addr, int port, int max_connections);
-int tcp_server_run(tcp_server *ts);
+  p2p_client_cache_item *caches;
+} p2p_server;
+int p2p_server_init(p2p_server *ts, const char *addr, int port, int max_connections);
+int p2p_server_run(p2p_server *ts);
 #endif
