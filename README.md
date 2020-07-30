@@ -40,5 +40,3 @@ cd p2p && make
 ![](./images/client2.jpg)
 ![](./images/client3.jpg)
 ![](./images/client4.jpg)
-![](./images/client5.jpg)
-![](./images/client6.jpg)
