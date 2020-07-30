@@ -143,8 +143,8 @@ static void tcp_client_gen_name(tcp_client *client, int port)
 }
 inline static void tcp_client_notify(tcp_client *client)
 {
-  pthread_create(&client->tid, NULL, (void *)&tcp_client_cache, client);
-  pthread_create(&client->tid, NULL, (void *)&tcp_client_rev_msg, client);
+  pthread_create(&client->input_thd, NULL, (void *)&tcp_client_cache, client);
+  pthread_create(&client->input_thd, NULL, (void *)&tcp_client_rev_msg, client);
 }
 static void tcp_client_handle_input(tcp_client *client, char **buf)
 {
