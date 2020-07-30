@@ -1,11 +1,11 @@
 /*************************************************************************
-  > File Name: tcp_client.c
+  > File Name: p2p_client.c
   > Author:perrynzhou 
   > Mail:perrynzhou@gmail.com 
   > Created Time: Friday, July 03, 2020 PM02:24:30 HKT
  ************************************************************************/
 
-#include "tcp_client.h"
+#include "p2p_client.h"
 #include "message.h"
 #include "hash_list.h"
 #include "util.h"
@@ -24,7 +24,7 @@ typedef struct udp_server_t
   struct sockaddr_in udp_addr;
 } udp_server;
 
-void tcp_client_send_message(const char *key, char *message, size_t message_size)
+void p2p_client_send_message(const char *key, char *message, size_t message_size)
 {
   char buffer[128] = {'\0'};
   snprintf((char *)buffer, 128, "%s", key);
@@ -46,16 +46,16 @@ void tcp_client_send_message(const char *key, char *message, size_t message_size
   }
 }
 
-int tcp_client_print_connection_meta(void *ctx, void *data)
+int p2p_client_print_connection_meta(void *ctx, void *data)
 {
   connection_meta *meta = (connection_meta *)data;
   fprintf(stdout, " %s\n", meta->addr);
 }
-int tcp_client_handle_list_cmd(tcp_client *client)
+int p2p_client_handle_list_cmd(p2p_client *client)
 {
-  hash_list_traverse(client->list, (hash_list_traverse_cb)tcp_client_print_connection_meta, NULL);
+  hash_list_traverse(client->list, (hash_list_traverse_cb)p2p_client_print_connection_meta, NULL);
 }
-static void *tcp_client_cache(tcp_client *client)
+static void *p2p_client_cache(p2p_client *client)
 {
   connection_meta *meta = NULL;
   while (1)
@@ -85,7 +85,7 @@ static void *tcp_client_cache(tcp_client *client)
   pthread_exit(NULL);
   return NULL;
 }
-static void *tcp_client_rev_msg(tcp_client *client)
+static void *p2p_client_rev_msg(p2p_client *client)
 {
   struct sockaddr_in src_addr;
   socklen_t addrlen = sizeof(src_addr);
@@ -104,9 +104,9 @@ static void *tcp_client_rev_msg(tcp_client *client)
   }
   return NULL;
 }
-tcp_client *tcp_client_alloc(const char *name, int sockfd, int hash_list_max_size)
+p2p_client *p2p_client_alloc(const char *name, int sockfd, int hash_list_max_size)
 {
-  tcp_client *client = (tcp_client *)calloc(1, sizeof(tcp_client));
+  p2p_client *client = (p2p_client *)calloc(1, sizeof(p2p_client));
   client->list = hash_list_alloc(hash_list_max_size);
   client->tcp_sock = sockfd;
   if (name != NULL)
@@ -115,7 +115,7 @@ tcp_client *tcp_client_alloc(const char *name, int sockfd, int hash_list_max_siz
   }
   return client;
 }
-int tcp_client_send(tcp_client *client, int conection_type)
+int p2p_client_send(p2p_client *client, int conection_type)
 {
   connection_meta_reset(&client->meta, conection_type, client->name);
   int ret = -1;
@@ -133,7 +133,7 @@ int tcp_client_send(tcp_client *client, int conection_type)
   }
   return -1;
 }
-static void tcp_client_gen_name(tcp_client *client, int port)
+static void p2p_client_gen_name(p2p_client *client, int port)
 {
   char name[128] = {'\0'};
   fetch_ip_address_from_localhost((char *)&name, 128);
@@ -141,12 +141,12 @@ static void tcp_client_gen_name(tcp_client *client, int port)
   snprintf((char *)&name + name_len, 128 - name_len, ":%d", port);
   client->name = strdup((char *)&name);
 }
-inline static void tcp_client_notify(tcp_client *client)
+inline static void p2p_client_notify(p2p_client *client)
 {
-  pthread_create(&client->input_thd, NULL, (void *)&tcp_client_cache, client);
-  pthread_create(&client->input_thd, NULL, (void *)&tcp_client_rev_msg, client);
+  pthread_create(&client->input_thd, NULL, (void *)&p2p_client_cache, client);
+  pthread_create(&client->input_thd, NULL, (void *)&p2p_client_rev_msg, client);
 }
-static void tcp_client_handle_input(tcp_client *client, char **buf)
+static void p2p_client_handle_input(p2p_client *client, char **buf)
 {
   *buf = (char *)calloc(4096, sizeof(char));
   char *input = *buf;
@@ -156,11 +156,11 @@ static void tcp_client_handle_input(tcp_client *client, char **buf)
     size_t len = strlen(input);
     if (strncmp(input, "list\n", 5) == 0)
     {
-      tcp_client_handle_list_cmd(client);
+      p2p_client_handle_list_cmd(client);
     }
     else if (strncmp(input, "quit\n", 5) == 0)
     {
-      tcp_client_send(client, connection_out);
+      p2p_client_send(client, connection_out);
       break;
     }
     else
@@ -173,7 +173,7 @@ static void tcp_client_handle_input(tcp_client *client, char **buf)
       char *msg = strsep(&buffer_ptr, " ");
       if (strncmp(cmd, "send", 4) == 0)
       {
-        tcp_client_send_message(key, msg, strlen(msg));
+        p2p_client_send_message(key, msg, strlen(msg));
       }
     }
     fprintf(stdout, "enter->");
@@ -184,7 +184,7 @@ static void tcp_client_handle_input(tcp_client *client, char **buf)
     *buf = NULL;
   }
 }
-void tcp_client_free(tcp_client *client)
+void p2p_client_free(p2p_client *client)
 {
   if (client != NULL)
   {
@@ -206,7 +206,7 @@ void tcp_client_free(tcp_client *client)
     client = NULL;
   }
 }
-inline static void tcp_client_init_chat_env(tcp_client *client, int port)
+inline static void p2p_client_init_chat_env(p2p_client *client, int port)
 {
   char ip[128] = {'\0'};
   fetch_ip_address_from_localhost((char *)&ip, 128);
@@ -221,11 +221,11 @@ int main(int argc, char *argv[])
   int local_port = atoi(argv[3]);
   char name[128] = {'\0'};
   char *buffer = NULL;
-  tcp_client *client = tcp_client_alloc(NULL, sock, 4096);
-  tcp_client_gen_name(client, local_port);
-  tcp_client_init_chat_env(client, local_port);
-  tcp_client_send(client, connection_in);
-  tcp_client_notify(client);
-  tcp_client_handle_input(client, &buffer);
+  p2p_client *client = p2p_client_alloc(NULL, sock, 4096);
+  p2p_client_gen_name(client, local_port);
+  p2p_client_init_chat_env(client, local_port);
+  p2p_client_send(client, connection_in);
+  p2p_client_notify(client);
+  p2p_client_handle_input(client, &buffer);
   return 0;
 }
