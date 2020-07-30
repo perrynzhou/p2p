@@ -31,7 +31,12 @@ cd p2p && make
 
 - 客户端运行
 ```
-./tcp_client
+./tcp_client  {server_ip_address}  {server_port}
+::connected to tcp server success::
+enter->list                          //list all clients info,include myself
+enter->send {client_info} {message}  //send single message to one client 
+enter->send all {message}            //brocast message to all clients
+enter->quit                          //exit 
 ```
 
 ### 运行实例
