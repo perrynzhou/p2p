@@ -177,7 +177,7 @@ int tcp_server_run(tcp_server *ts)
             tcp_server_push_out_to_client(ts, meta, clientfd);
             epoll_ctl(ts->efd, EPOLL_CTL_DEL, ts->connections_events[i].data.fd, &ts->event);
             connection_meta_free(meta);
-            fprintf(stdout, "fd=%d %s leave\n", clientfd, (char *)&addr);
+            fprintf(stdout, "fd=%d %s disconnected\n", clientfd, (char *)&addr);
           }
         }
       }
@@ -192,6 +192,5 @@ int main(int argc, char *argv[])
   fetch_ip_address_from_localhost((char *)&local_addr, 128);
   tcp_server_init(&ts, (char *)&local_addr, atoi(argv[1]), 1024);
   tcp_server_run(&ts);
-
   return 0;
 }

@@ -11,6 +11,7 @@
 #include "util.h"
 #include <stdio.h>
 #include <time.h>
+#include <errno.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -20,9 +21,30 @@
 typedef struct udp_server_t
 {
   int sock;
-  int pipe[2];
   struct sockaddr_in udp_addr;
 } udp_server;
+
+void tcp_client_send_message(const char *key, char *message, size_t message_size)
+{
+  char buffer[128] = {'\0'};
+  snprintf((char *)buffer, 128, "%s", key);
+  char *string = (char *)&buffer;
+  char *addr = strsep(&string, ":");
+  int port = atoi(strsep(&string, ":"));
+  struct sockaddr_in addrsrv;
+  bzero(&addrsrv, sizeof(addrsrv));
+  int udp_sock = init_udp_socket(addr, port, &addrsrv);
+  socklen_t len = sizeof(addrsrv);
+  if (sendto(udp_sock, message, message_size, 0, (struct sockaddr *)&addrsrv, len) < 0)
+  {
+    close(udp_sock);
+    fprintf(stdout, "send message failed:%s\n", strerror(errno));
+  }
+  if (udp_sock != -1)
+  {
+    close(udp_sock);
+  }
+}
 
 int tcp_client_print_connection_meta(void *ctx, void *data)
 {
@@ -33,20 +55,9 @@ int tcp_client_handle_list_cmd(tcp_client *client)
 {
   hash_list_traverse(client->list, (hash_list_traverse_cb)tcp_client_print_connection_meta, NULL);
 }
-static int tcp_client_init_chat_env(udp_server *us, const char *udp_remote_addr, int udp_remote_port)
-{
-
-  us->sock = init_udp_socket(udp_remote_addr, udp_remote_port);
-  bzero(&us->udp_addr, sizeof(us->udp_addr));
-  us->udp_addr.sin_family = AF_INET;
-  us->udp_addr.sin_port = htons(udp_remote_port);
-  us->udp_addr.sin_addr.s_addr = inet_addr(udp_remote_addr);
-  return 0;
-}
 static void *tcp_client_cache(tcp_client *client)
 {
   connection_meta *meta = NULL;
-  int done = 1;
   while (1)
   {
     ssize_t count = recv(client->tcp_sock, &client->meta, sizeof(client->meta), 0);
@@ -55,10 +66,12 @@ static void *tcp_client_cache(tcp_client *client)
       switch (client->meta.kind)
       {
       case connection_in:
+        //fprintf(stdout,"::in %s\n",(char *)&client->meta.addr);
         meta = connection_meta_alloc(client->meta.kind, (char *)&client->meta.addr);
         hash_list_insert(client->list, (char *)&client->meta.addr, meta);
         break;
       case connection_out:
+        //fprintf(stdout,"::out %s\n",(char *)&client->meta.addr);
         meta = hash_list_remove(client->list, (char *)&client->meta.addr);
         connection_meta_free(meta);
         meta = NULL;
@@ -70,6 +83,26 @@ static void *tcp_client_cache(tcp_client *client)
   }
   pthread_detach(pthread_self());
   pthread_exit(NULL);
+  return NULL;
+}
+static void *tcp_client_rev_msg(tcp_client *client)
+{
+  struct sockaddr_in src_addr;
+  socklen_t addrlen = sizeof(src_addr);
+  char buffer[4096] = {'\0'};
+  char ipaddr[128] = {'\0'};
+  while (1)
+  {
+    size_t count = recvfrom(client->udp_sock, (char *)&buffer, 4096, 0, (struct sockaddr *)&src_addr, &addrlen);
+    if (count > 0)
+    {
+      buffer[count - 1] = '\0';
+      inet_ntop(AF_INET, &src_addr.sin_addr, (char *)&ipaddr, sizeof(ipaddr));
+      int port = ntohs(src_addr.sin_port);
+      fprintf(stderr, "::recv message=%s from %s:%d\n", (char *)&buffer, (char *)&ipaddr, port);
+    }
+  }
+  return NULL;
 }
 tcp_client *tcp_client_alloc(const char *name, int sockfd, int hash_list_max_size)
 {
@@ -111,6 +144,7 @@ static void tcp_client_gen_name(tcp_client *client, int port)
 inline static void tcp_client_notify(tcp_client *client)
 {
   pthread_create(&client->tid, NULL, (void *)&tcp_client_cache, client);
+  pthread_create(&client->tid, NULL, (void *)&tcp_client_rev_msg, client);
 }
 static void tcp_client_handle_input(tcp_client *client, char **buf)
 {
@@ -128,6 +162,19 @@ static void tcp_client_handle_input(tcp_client *client, char **buf)
     {
       tcp_client_send(client, connection_out);
       break;
+    }
+    else
+    {
+      char buffer[4096] = {'\0'};
+      snprintf((char *)&buffer, 4096, "%s", input);
+      char *buffer_ptr = (char *)&buffer;
+      char *cmd = strsep(&buffer_ptr, " ");
+      char *key = strsep(&buffer_ptr, " ");
+      char *msg = strsep(&buffer_ptr, " ");
+      if (strncmp(cmd, "send", 4) == 0)
+      {
+        tcp_client_send_message(key, msg, strlen(msg));
+      }
     }
     fprintf(stdout, "enter->");
   }
@@ -159,6 +206,13 @@ void tcp_client_free(tcp_client *client)
     client = NULL;
   }
 }
+inline static void tcp_client_init_chat_env(tcp_client *client, int port)
+{
+  char ip[128] = {'\0'};
+  fetch_ip_address_from_localhost((char *)&ip, 128);
+  struct sockaddr_in dest_addr;
+  client->udp_sock = init_udp_socket((char *)&ip, port, &dest_addr);
+}
 int main(int argc, char *argv[])
 {
   char *remote_addr = argv[1];
@@ -169,6 +223,7 @@ int main(int argc, char *argv[])
   char *buffer = NULL;
   tcp_client *client = tcp_client_alloc(NULL, sock, 4096);
   tcp_client_gen_name(client, local_port);
+  tcp_client_init_chat_env(client, local_port);
   tcp_client_send(client, connection_in);
   tcp_client_notify(client);
   tcp_client_handle_input(client, &buffer);

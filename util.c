@@ -75,9 +75,21 @@ int init_tcp_socket(const char *addr, int port, int backlog)
   int real_backlog = (backlog < NET_BACKLOG_LEN) ? NET_BACKLOG_LEN : backlog;
   return init_socket(AF_INET, SOCK_STREAM, IPPROTO_TCP, real_backlog, addr, port);
 }
-int init_udp_socket(const char *addr, int port)
+int init_udp_socket(const char *addr, int port, struct sockaddr_in *addrsrv)
 {
-  return init_socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP, 0, addr, port);
+  int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+  if (sock != -1)
+  {
+    addrsrv->sin_family = AF_INET;
+    addrsrv->sin_port = htons(port);
+    if (inet_pton(AF_INET, addr, &addrsrv->sin_addr) <= 0)
+    {
+      close(sock);
+      return -1;
+    }
+    bind(sock, (struct sockaddr *)addrsrv, sizeof(*addrsrv));
+  }
+  return sock;
 }
 int set_tcp_nonblock(int fd)
 {
