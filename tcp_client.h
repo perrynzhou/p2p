@@ -15,8 +15,8 @@ typedef struct tcp_client_t
   hash_list *list;
   int tcp_sock;
   int udp_sock;
-  pthread_t tid;
-  pthread_t wid;
+  pthread_t input_thd;
+  pthread_t read_thd;
   connection_meta meta;
 } tcp_client;
 
